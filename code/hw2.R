@@ -9,80 +9,65 @@ setwd('/Users/Erin/Documents/Classes/826/hw2/')
 library(sas7bdat)
 nhefs <- read.sas7bdat("data/nhefs_book.sas7bdat")
 nhefs <- as.data.frame(nhefs)
+head(nhefs)
+
+# Preliminary testing indicated that sex, age, and race are good
+# candidates for 
+nhefs.use <- with(nhefs,data.frame(seqn,qsmk,wt82_71,sex,age,race,income,
+                                   marital,school,smokeyrs))
+nhefs.measures <- nhefs.use[,2:10]
+nhefs.cor <- cor(nhefs.measures,use="pairwise.complete.obs",method="spearman")
+cor.test(nhefs.cor)
+with(nhefs.final,summary(qsmk))
+
+
+# (a) Use a logistic regression to estimate a propensity score
+#     for quitting smoking. Examine if there are some overlap 
+#     between the propensity scores of the two groups (smoking 
+#     and non-smoking) based on the model. Include the summary 
+#     for your logistic regression and the overlap plot for your 
+#     logistic regression.
+
+
+# Trying out a few
+glm1 <- glm(qsmk~
+              age+factor(sex)+factor(race)+factor(income)+factor(marital)+school,
+            data=nhefs.use,family="binomial")
+drop1(glm1,test="LRT")
+glm2 <- glm(qsmk~
+              age+factor(sex)+factor(race)+factor(income)+school,
+            data=nhefs.use,family="binomial")
+drop1(glm2,test="LRT")
+glm3 <- glm(qsmk~
+              age+factor(sex)+factor(race)+factor(income),
+            data=nhefs.use,family="binomial")
+drop1(glm3,test="LRT")
+glm4 <- glm(qsmk~
+              age+factor(sex)+factor(race),
+            data=nhefs.use,family="binomial")
+drop1(glm4,test="LRT")
+
+nhefs.final <- with(nhefs.use,
+                    na.omit(data.frame(seqn,qsmk,age,sex,race,wt82_71)))
+
+# Settling on glm4
+N <- with(nhefs.final,length(seqn))
 
 
 
+# Analysis restricted to N=1679
+# with non-missing values on qsmk, wtchange, age, sex, and race
+
+glm.final <- glm(qsmk~age+factor(sex)+factor(race),
+                 data=nhefs.final,family="binomial")
+summary(glm.final)
+
+nhefs.final$propensity <- predict(glm.final, type="response")
 
 
-nhefs$cens <- as.numeric(is.na(nhefs$wt82))
-nhefs$older <- as.numeric(nhefs$age > 50 & !is.na(nhefs$age))
-#install.packages("car")
-library(car)
-nhefs$education.code <- recode(nhefs$school, " 0:8 = 1; 9:11 = 2; 12 = 3; 
-                         13:15 = 4; 16:hi = 5; NA = 6 ")
-nhefs$education <- recode(nhefs$education.code, " 1 = '1. 8th grade or less';
-                    2 = '2. HS dropout';
-                          3 = '3. HS';
-                          4 = '4. College dropout';
-                          5 = '5. College or more';
-                          6 = 'Unknown' ")
 
-# Analysis restricted to N=1566 
-# with non-missing values in the following covariates
-nhefs.original <- nhefs # Original data saved for later use
-nhefs$id <- 1:nrow(nhefs)
-nhefs2 <- nhefs[c("id", "qsmk", "sex", "race", "age", "school", 
-                  "smokeintensity", "smokeyrs", "exercise", "active", 
-                  "wt71", "wt82")]
-dim(nhefs2)
-nhefs2 <- as.data.frame(na.omit(nhefs2))
-dim(nhefs2)
-nhefs <- subset(nhefs, id %in% nhefs2$id)
-rm(nhefs2)
-dim(nhefs)
-
-# mean weight change in those with and without smoking cessation
-summary(nhefs$wt82_71[nhefs$cens == 0 & nhefs$qsmk == 0])
-sd(nhefs$wt82_71[nhefs$cens == 0 & nhefs$qsmk == 0])
-summary(nhefs$wt82_71[nhefs$cens == 0 & nhefs$qsmk == 1])
-sd(nhefs$wt82_71[nhefs$cens == 0 & nhefs$qsmk == 1])
-
-summary(glm(wt82_71 ~ qsmk, data = subset(nhefs, cens == 0)))
-
-# restricting data for uncensored
-nhefs0 <- subset(nhefs, cens == 0)
-
-# baseline characteristics
-years1 <-mean(nhefs0$age[nhefs0$qsmk == 1])
-years0 <-mean(nhefs0$age[nhefs0$qsmk == 0])
-male1 <-100*mean(nhefs0$sex[nhefs0$qsmk == 1]==0)
-male0 <-100*mean(nhefs0$sex[nhefs0$qsmk == 0]==0)
-white1 <-100*mean(nhefs0$race[nhefs0$qsmk == 1]==0)
-white0 <-100*mean(nhefs0$race[nhefs0$qsmk == 0]==0)
-university1 <-100*mean(nhefs0$education.code[nhefs0$qsmk == 1]==5)
-university0 <-100*mean(nhefs0$education.code[nhefs0$qsmk == 0]==5)
-kg1 <-mean(nhefs0$wt71[nhefs0$qsmk == 1])
-kg0 <-mean(nhefs0$wt71[nhefs0$qsmk == 0])
-cigs1 <-mean(nhefs0$smokeintensity[nhefs0$qsmk == 1])
-cigs0 <-mean(nhefs0$smokeintensity[nhefs0$qsmk == 0])
-smoke1 <-mean(nhefs0$smokeyrs[nhefs0$qsmk == 1])
-smoke0 <-mean(nhefs0$smokeyrs[nhefs0$qsmk == 0])
-noexer1 <-100*mean(nhefs0$exercise[nhefs0$qsmk == 1]==2)
-noexer0 <-100*mean(nhefs0$exercise[nhefs0$qsmk == 0]==2)
-inactive1 <-100*mean(nhefs0$active[nhefs0$qsmk == 1]==2)
-inactive0 <-100*mean(nhefs0$active[nhefs0$qsmk == 0]==2)
-
-baseline.char <- round(matrix(c(years1, years0, male1, male0, white1, white0, 
-                                university1, university0, kg1, kg0, cigs1, cigs0, smoke1, smoke0, 
-                                noexer1, noexer0, inactive1, inactive0),
-                              ncol = 2, byrow=T), 1) 
-dimnames(baseline.char) <- list(c("age, years", "men, %", "white, %", 
-                                  "university, %", "weight, kg", 
-                                  "Chigarettes/day", "year smoking", 
-                                  "little/no exercise, %", 
-                                  "inactive daily life, %"),
-                                c("Smoking cessation (A=1)","No smoking cessation (A=0)"))
-print(baseline.char)
+require(ggplot2)
+qplot(propensity,data=nhefs.final,group=qsmk,colour=qsmk,geom="density")
 
 #####################################################
 # Estimating IP weights
